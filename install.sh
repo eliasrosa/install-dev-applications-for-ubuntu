@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Use single quotes instead of double quotes to make it work with special-character passwords
-PROJECT_FOLDER="public"
+PATH_APACHE="/home/${USER}/www"
 
 PHP_INI=(
 	"short_open_tag=On"
@@ -12,21 +12,23 @@ PHP_INI=(
 
 VHOST=$(cat <<EOF
 <VirtualHost *:80>
-    DocumentRoot "/var/www/html/${PROJECT_FOLDER}"
+    DocumentRoot "${PATH_APACHE}"
 
-    ErrorLog /var/www/html/vagrant-lamp/logs/error.log
-    CustomLog /var/www/html/vagrant-lamp/logs/access.log combined
+    ErrorLog ${PATH_APACHE}/.logs/error.log
+    CustomLog ${PATH_APACHE}/.logs/access.log combined
 
     <ifmodule mpm_itk_module>
-        AssignUserID vagrant vagrant
+        AssignUserID ${USER} ${USER}
     </ifmodule>
 
-    Alias /phpinfo /var/www/phpinfo
-
-    <Directory "/var/www/html/${PROJECT_FOLDER}">
+    <Directory "${PATH_APACHE}">
         AllowOverride All
         Require all granted
     </Directory>
+
+    <IfModule dir_module>
+        DirectoryIndex index.php index.html index.xhtml index.htm
+    </IfModule>
 </VirtualHost>
 EOF
 )
@@ -40,7 +42,14 @@ EOF
 )
 
 
+# stop services
+# ---------------------------------
+sudo service apache2 stop
+sudo service mysql stop
+
+
 # update / upgrade
+# ---------------------------------
 sudo apt-get update
 sudo apt-get -y upgrade
 
@@ -51,11 +60,12 @@ sudo debconf-set-selections <<< "mysql-server mysql-server/root_password passwor
 sudo debconf-set-selections <<< "mysql-server mysql-server/root_password_again password root"
 
 
-# install apache 2.5 and php 5.5
+# install apache 2 and php 5
 # ---------------------------------
 sudo apt-get install -y apache2
 sudo apt-get install -y apache2-mpm-itk
 sudo apt-get install -y apache2-mpm-prefork
+sudo apt-get install -y libapache2-mod-php5
 sudo apt-get install -y php5
 sudo apt-get install -y php5-curl
 sudo apt-get install -y php5-gd
@@ -63,15 +73,9 @@ sudo apt-get install -y git
 sudo apt-get install -y mysql-server
 sudo apt-get install -y php5-mysql
 sudo apt-get install -y build-essential
-sudo apt-get install -y ruby1.9.1-dev
 sudo apt-get install -y php-pear
 sudo apt-get install -y php5-dev
-
-
-# Set timezone
-# ---------------------------------
-echo "America/Sao_Paulo" | tee /etc/timezone
-dpkg-reconfigure --frontend noninteractive tzdata
+sudo apt-get install -y sendmail
 
 
 # install phpmyadmin and give password(s) to installer
@@ -87,13 +91,11 @@ sudo apt-get -y install phpmyadmin
 
 # Apache changes
 # ---------------------------------
-rm -f /var/www/html/index.html
-sudo mkdir /var/www/phpinfo
-sudo mkdir "/var/www/html/${PROJECT_FOLDER}"
-echo "${VHOST}" > /etc/apache2/sites-available/000-default.conf
-echo "${VHOST}"
-echo "${PHPINFO}" > /var/www/phpinfo/index.php
-echo "ServerName localhost" >> /etc/apache2/apache2.conf
+sudo mkdir ${PATH_APACHE}
+sudo mkdir ${PATH_APACHE}/.logs
+sudo echo "${VHOST}" > /etc/apache2/sites-available/000-default.conf
+sudo echo "${PHPINFO}" > ${PATH_APACHE}/index.php
+sudo echo "ServerName localhost" >> /etc/apache2/apache2.conf
 sudo a2dismod mpm_prefork
 sudo a2enmod mpm_itk
 sudo a2enmod rewrite
@@ -101,18 +103,13 @@ sudo a2enmod rewrite
 
 # Configure MySQL database and user
 # ---------------------------------
-echo "DROP DATABASE IF EXISTS homestead" | mysql -uroot -proot
-echo "CREATE USER 'homestead'@'localhost' IDENTIFIED BY 'secret'" | mysql -uroot -proot
-echo "CREATE DATABASE homestead" | mysql -uroot -proot
-echo "GRANT ALL ON homestead.* TO 'homestead'@'localhost'" | mysql -uroot -proot
 echo "FLUSH PRIVILEGES" | mysql -uroot -proot
-mysql -u root -proot homestead < /var/www/html/homestead.sql
 
 
 # Install Composer
 # ---------------------------------
-php -r "readfile('https://getcomposer.org/installer');" | php
-mv composer.phar /usr/local/bin/composer
+curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+composer self-update
 
 
 # Configure php.ini
@@ -121,15 +118,30 @@ for ix in ${!PHP_INI[*]}
 do
 	IFS="=" read var val <<< ${PHP_INI[$ix]}
 	PHP_CONF="$var = $val"
-	sed -i "s#^$var.*#$PHP_CONF#" /etc/php5/apache2/php.ini
+	sudo sed -i "s#^$var.*#$PHP_CONF#" /etc/php5/apache2/php.ini
 	echo "Set php.ini >>>> $var = $val"
 done
 
 
 # Install Mailcatcher
 # ---------------------------------
-echo "Installing mailcatcher"
-sudo apt-get install -y libsqlite3-dev
-sudo gem install mailcatcher --no-ri --no-rdoc
-sed -i '/;sendmail_path =/c sendmail_path = "/usr/local/bin/catchmail"' /etc/php5/apache2/php.ini
+#echo "Installing mailcatcher"
+#sudo apt-get install -y ruby2.0-dev
+#sudo apt-get install -y libsqlite3-dev
+#sudo gem install mime-types --version "< 3"
+#sudo gem install mailcatcher --conservative
+#sudo gem install mailcatcher --no-ri --no-rdoc
+# sed -i '/;sendmail_path =/c sendmail_path = "/usr/local/bin/catchmail"' /etc/php5/apache2/php.ini
+
+
+# Limpa os arquivos de Log
+# ---------------------------------
+echo "Truncate error.log and access.log"
+sudo truncate -s 0 ${PATH_APACHE}/.logs/error.log
+sudo truncate -s 0 ${PATH_APACHE}/.logs/access.log
+
+
+# Restart services
+# ---------------------------------
+sudo ./restart-services.sh
 
