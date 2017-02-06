@@ -41,20 +41,43 @@ sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/admin-pass password
 sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/app-pass password root"
 sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/reconfigure-webserver multiselect apache2"
 sudo apt-get install -y phpmyadmin
- 
+
 echo "Installing Composer & Git"
 sudo apt-get install -y composer
 sudo apt-get install -y git
 sudo apt-get install -y gitg
-
-echo "Permissions for /var/www"
-sudo usermod -aG www-data ${SUDO_USER}
-sudo chown -R ${SUDO_USER}:www-data /var/www/html
-ln -s /var/www/html /home/${SUDO_USER}/www
+sudo apt-get install -y git-gui
 
 echo "Enabling Modules"
 sudo a2enmod rewrite
 sudo a2enmod php7.0
+
+echo "Configurating PHP"
+PHP_INI=(
+	"short_open_tag=On"
+	"display_error=On"
+	"display_startup_errors=On"
+	"error_reporting=E_ALL \\\\& ~E_NOTICE \\\\& ~E_DEPRECATED \\\\& ~E_STRICT"
+)
+for ix in ${!PHP_INI[*]}
+do
+	IFS="=" read var val <<< ${PHP_INI[$ix]}
+	PHP_CONF="$var = $val"
+	sudo sed -i "s#^$var.*#$PHP_CONF#" /etc/php5/apache2/php.ini
+	echo "Set php.ini >>>> $var = $val"
+done
+
+echo "Configurating Permissions"
+sudo adduser $SUDO_USER www-data
+sudo chown -R www-data:www-data /var/www
+sudo chown -R $SUDO_USER:www-data /var/www/html
+sudo chown -R $SUDO_USER:www-data /var/lock/apache2
+sudo find /var/www/ -type d -exec chmod 755 {} \;
+sudo find /var/www/ -type f -exec chmod 644 {} \;
+
+echo "Configurating Apache2"
+ln -s /var/www/html/ /home/$SUDO_USER/www
+sudo sed -i "s/APACHE_RUN_USER=www-data/APACHE_RUN_USER=$SUDO_USER/" /etc/apache2/envvars
 
 echo "Restarting Apache"
 sudo service apache2 restart
