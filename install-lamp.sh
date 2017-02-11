@@ -47,6 +47,7 @@ sudo apt-get install -y composer
 sudo apt-get install -y git
 sudo apt-get install -y gitg
 sudo apt-get install -y git-gui
+sudo apt-get install -y aspell-pt-br
 
 echo "Enabling Modules"
 sudo a2enmod rewrite
@@ -63,21 +64,22 @@ for ix in ${!PHP_INI[*]}
 do
 	IFS="=" read var val <<< ${PHP_INI[$ix]}
 	PHP_CONF="$var = $val"
-	sudo sed -i "s#^$var.*#$PHP_CONF#" /etc/php5/apache2/php.ini
+	sudo sed -i "s#^$var.*#$PHP_CONF#" /etc/php/7.0/apache2/php.ini
 	echo "Set php.ini >>>> $var = $val"
 done
 
 echo "Configurating Permissions"
 sudo adduser $SUDO_USER www-data
 sudo chown -R www-data:www-data /var/www
-sudo chown -R $SUDO_USER:www-data /var/www/html
-sudo chown -R $SUDO_USER:www-data /var/lock/apache2
-sudo find /var/www/ -type d -exec chmod 755 {} \;
-sudo find /var/www/ -type f -exec chmod 644 {} \;
+sudo chown -R $SUDO_USER:$SUDO_USER /var/www/html
+sudo chown -R $SUDO_USER:$SUDO_USER /var/lock/apache2
 
 echo "Configurating Apache2"
 ln -s /var/www/html/ /home/$SUDO_USER/www
 sudo sed -i "s/APACHE_RUN_USER=www-data/APACHE_RUN_USER=$SUDO_USER/" /etc/apache2/envvars
+sudo sed -i "s/APACHE_RUN_GROUP=www-data/APACHE_RUN_GROUP=$SUDO_USER/" /etc/apache2/envvars
+sudo cp -f ./lamp_files/000-default.conf /etc/apache2/sites-enabled/000-default.conf
+sudo rm -f /var/www/html/index.html
 
 echo "Restarting Apache"
 sudo service apache2 restart
