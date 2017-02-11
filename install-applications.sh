@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+echo "Updating System.."
+sudo apt-get update -y && sudo apt-get upgrade -y
+
+echo "Install Sublime Text"
+sudo add-apt-repository ppa:webupd8team/sublime-text-3
+sudo apt-get update
+sudo apt-get install sublime-text-installer
+
+echo "Install Filezilla"
+sudo apt-get install filezilla
+
+echo "Install Commons Applications "
+sudo apt-get install ark
